@@ -40,7 +40,7 @@ usage(void)
 int
 main(int argc, char *argv[])
 {
-	int		 ch;
+	int		 ch, status;
 	struct passwd	*pw;
 
 	if (getuid() != 0)
@@ -73,10 +73,11 @@ ex_usage:
 	    setresgid(pw->pw_gid, pw->pw_gid, pw->pw_gid) ||
 	    setresuid(pw->pw_uid, pw->pw_uid, pw->pw_uid))
 		err(EX_OSERR, "cannot drop privileges");
-							 
+
 	argc--;
 	argv++;
-	execvp(*argv, argv);
+	status = execvp(*argv, argv);
+	err(status, "execvp(%s)", *argv);
 }
 
 static void
@@ -89,9 +90,8 @@ open_file(const char *pathd)
 
 	if ((comma = strchr(pathd, ',')) == NULL)
 		errx(EX_USAGE, "path description is wrong");
-
-	if ((comma = strchr(pathd, ',')) == NULL)
-		errx(EX_USAGE, "path description is wrong");
+	if (comma - pathd + 1 > (int)sizeof(path))
+		errx(EX_USAGE, "path description is too long");
 	memcpy(path, pathd, comma - pathd);
 	path[comma - pathd] = '\0';
 
@@ -100,13 +100,9 @@ open_file(const char *pathd)
 		errx(EX_USAGE, "path description is wrong");
 
 	*(comma++) = '\0';
-
 	newf = strtonum(comma, 3, 64, &errstr);
 	if (errstr != NULL)
 		errx(EX_USAGE, "assigning fd number must be 3-64");
-
-	if (comma - pathd + 1 > sizeof(path))
-		errx(EX_USAGE, "path description is too long");
 
 	if ((fp = fopen(path, mode)) == NULL)
 		err(EX_OSERR, "fopen(%s, %s)", path, mode);
@@ -114,7 +110,7 @@ open_file(const char *pathd)
 	if ((tmpf = dup(fileno(fp))) < 0)
 		err(EX_OSERR, "dup()");
 	fclose(fp);
-	
+
 	if (tmpf != newf) {
 		if (dup2(tmpf, newf) < 0)
 			err(EX_OSERR, "dup2()");
